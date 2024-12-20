@@ -1,5 +1,6 @@
 using System.Drawing.Printing;
 using Emgu.CV;
+using Emgu.CV.Structure;
 
 namespace ExampleCam
 {
@@ -9,24 +10,9 @@ namespace ExampleCam
         private Mat? _frame;
         private bool IsConnect = true;
         private bool IsRecord = true;
-        
-        
 
-        private void ProcessFrame(object sender, EventArgs e)
-        {
-            
-            if (_capture != null && _capture.Ptr != IntPtr.Zero)
-            {
-                
-                bool canCapture = _capture.Retrieve(_frame, 0);
-                if (canCapture)
-                {
-                    
-                    imageBox1.Image = _frame;
-                }
+        CascadeClassifier _cascadeClassifier = new CascadeClassifier(@"C:\Users\nenea\Downloads\emgucv-master\emgucv-master\opencv\haarcascade_frontalface_default.xml");
 
-            }
-        }
         public Form1()
         {
             InitializeComponent();
@@ -35,15 +21,55 @@ namespace ExampleCam
             buttonFlipH.Enabled = false;
 
         }
-        
-        private async void buttonConnect_Click(object sender, EventArgs e) 
+
+        private void ProcessFrame(object sender, EventArgs e)
         {
-           
-        
-            
+
+            if (_capture != null && _capture.Ptr != IntPtr.Zero)
+            {
+                using (var imageFrame = _capture.QueryFrame().ToImage<Bgr, Byte>())
+                {
+                    if (imageFrame != null)
+                    {
+                        var grayframe = imageFrame.Convert<Gray, byte>();
+                        var faces = _cascadeClassifier.DetectMultiScale(grayframe, 1.1, 10);
+
+                        foreach (var face in faces)
+                        {
+                            imageFrame.Draw(face, new Bgr(Color.MistyRose), 3);
+                        }
+                        imageBoxLive.Image = imageFrame;
+
+                        if (faces.Length > 0)
+                        {
+                            Rectangle face_roi = new Rectangle(faces[0].X, faces[0].Y, 190, 190);
+                            grayframe.ROI = face_roi;
+                            imageBoxFace.Image = grayframe.Copy();
+                        }
+                    }
+
+                    //bool canCapture = _capture.Retrieve(_frame, 0);
+                    //if (canCapture)
+                    //{
+
+                    //    imageBox1.Image = _frame;
+                    //}
+
+                }
+            }
+        }
+
+
+        private async void buttonConnect_Click(object sender, EventArgs e)
+        {
+
+
+
             if (IsConnect)
             {
+                await WaitConnectCam();
                 await Connect();
+
                 buttonConnect.Text = "Disconnect";
 
                 buttonStart.Enabled = true;
@@ -51,8 +77,8 @@ namespace ExampleCam
                 buttonFlipH.Enabled = true;
             }
             else
-           {
-                Disconnect(); 
+            {
+                Disconnect();
                 buttonConnect.Text = "Connect";
                 buttonStart.Enabled = false;
                 buttonFlipV.Enabled = false;
@@ -66,7 +92,7 @@ namespace ExampleCam
 
         private void buttonDisconnect_Click(object sender, EventArgs e)
         {
-            
+
             try
             {
                 if (_capture != null)
@@ -74,7 +100,7 @@ namespace ExampleCam
                     _capture.Pause();
                     _capture.ImageGrabbed -= ProcessFrame;
                     _capture.Dispose();
-                    
+
                 }
                 if (_frame != null)
                 {
@@ -90,7 +116,7 @@ namespace ExampleCam
 
         }
 
-        private void Disconnect ()
+        private void Disconnect()
         {
             try
             {
@@ -114,17 +140,23 @@ namespace ExampleCam
             }
 
         }
-        
-        private async Task Connect ()
+
+        private async Task Connect()
         {
             try
             {
-                await WaitConnectCam();
-                _capture = new VideoCapture();
-                _capture.ImageGrabbed += ProcessFrame;
-                _frame = new Mat();
-                ConnectCam();
+                await Task.Run(() =>
+                {
+                    _capture = new VideoCapture();
+                    _frame = new Mat();
 
+                });
+
+                if (_capture != null)
+                {
+                    _capture.ImageGrabbed += ProcessFrame;
+                    ConnectCam();
+                }
             }
             catch (NullReferenceException excpt)
             {
@@ -134,7 +166,7 @@ namespace ExampleCam
 
         private void buttonStart_Click(object sender, EventArgs e)
         {
-            
+
             if (IsRecord)
             {
 
@@ -185,7 +217,7 @@ namespace ExampleCam
 
         }
 
-        private void ConnectCam()
+        private async void ConnectCam()
         {
             CamStatus.Text = "Status:Connect";
             CamStatus.BackColor = Color.LimeGreen;
@@ -198,23 +230,38 @@ namespace ExampleCam
             await Task.Delay(1000);
         }
 
-        private void DisconnectCam()
+        private async void DisconnectCam()
         {
             CamStatus.Text = "Status: Disconnect";
             CamStatus.BackColor = Color.RosyBrown;
         }
 
-        private void Recording ()
+        private async void Recording()
         {
-            RecStatus.Text = "Recording: Yes";
+            RecStatus.Text = "Recording: Yes";  
             RecStatus.BackColor = Color.LimeGreen;
         }
 
-        private void NoRecording()
+        private async void NoRecording()
         {
             RecStatus.Text = "Recording: No";
             RecStatus.BackColor = Color.RosyBrown;
         }
 
+        private void timer1_Tick(object sender, EventArgs e)
+        {
+            string formatStringClock = "HH:mm:ss";
+            string formatStringDate = "yyyy-MMM-dd";
+
+            DateTime dateNow = DateTime.Now;
+            statusLabelClock.Text = dateNow.ToString(formatStringClock);
+            statusLabelDate.Text = dateNow.ToString(formatStringDate);
+
+        }
+
+        private void groupBoxControl_Enter(object sender, EventArgs e)
+        {
+
+        }
     }
 }
